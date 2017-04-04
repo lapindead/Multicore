@@ -1,19 +1,7 @@
-/*
-  Branch and bound algorithm to find the minimum of continuous binary 
-  functions using interval arithmetic.
-
-  Sequential version
-
-  Author: Frederic Goualard <Frederic.Goualard@univ-nantes.fr>
-  v. 1.0, 2013-02-15
-*/
-
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <stdexcept>
-#include <vector>
-#include <queue>
 #include "interval.h"
 #include "functions.h"
 #include "minimizer.h"
@@ -81,7 +69,10 @@ void minimize(itvfun f,  // Function to minimize
 
 int main(int argc, char * argv[])
 {
-  /*cout.precision(16);
+	int numprocs,rank;
+	char procname[MPI_MAX_PROCESSOR_NAME];
+
+  cout.precision(16);
   // By default, the currently known upper bound for the minimizer is +oo
   double min_ub = numeric_limits<double>::infinity();
   // List of potential minimizers. They may be removed from the list
@@ -98,88 +89,34 @@ int main(int argc, char * argv[])
   opt_fun_t fun;
   
   bool good_choice;
-  
-  // MPI vars
-  int numprocs, rank, size;
-  interval localx, localy;
-  
-  queue<interval> subBoxes;
-  bool enough_boxes;
-  
-  // MPI initialization
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+
+  MPI_Init(&argc,&argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 
   // Asking the user for the name of the function to optimize
-  if(rank == 0) {
-		do {
-		  good_choice = true;
+  do {
+    good_choice = true;
 
-		  cout << "Which function to optimize?\n";
-		  cout << "Possible choices: ";
-		  for (auto fname : functions) {
-		    cout << fname.first << " ";
-		  }
-		  cout << endl;
-		  cin >> choice_fun;
-		  
-		  try {
-		    fun = functions.at(choice_fun);
-		  } catch (out_of_range) {
-		    cerr << "Bad choice" << endl;
-		    good_choice = false;
-		  }
-		} while(!good_choice);
-  
+    cout << "Which function to optimize?\n";
+    cout << "Possible choices: ";
+    for (auto fname : functions) {
+      cout << fname.first << " ";
+    }
+    cout << endl;
+    cin >> choice_fun;
+    
+    try {
+      fun = functions.at(choice_fun);
+    } catch (out_of_range) {
+      cerr << "Bad choice" << endl;
+      good_choice = false;
+    }
+  } while(!good_choice);
 
-		// Asking for the threshold below which a box is not split further
-		cout << "Precision? ";
-		cin >> precision; 
-	}
-  
-  // Broadcasting precision variable
-  MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  
-  // Dividing the initial box into enought sub-boxes to feed all procs
-  // J'ai l'impression que ça ressemble pas a grand chose.
-  // J'essaye de diviser la boite initiale de manière à ce qu'on en ai 
-  // le plus possible tout en ayant moins que le nombre max de procs.
-  
-  // Je met la boite de base
-  subBoxes.push(fun.x);
-  subBoxes.push(fun.y);
-  do { 
-  	// Je considère qu'on a au moins 4 procs donc on rentre au moins une fois dans la boucle
-  	enough_boxes = true;
-  	size = subBoxes.size();
-  	// Divise chaque boite de la file en 4 nouvelles boites  	
-  	for(int i = 0; i < size; i + 2) {
-  		interval xl, xr, yl, yr;
-  		split_box(subBoxes[0],subBoxes[1],xl,xr,yl,yr);
-  		// Enlève les boite divisées
-  		subBoxes.pop();
-  		subBoxes.pop();
-  		// rajoutte les nouvelles boites
-  		subBoxes.push(xl);
-  		subBoxes.push(yl);
-  		subBoxes.push(xl);
-  		subBoxes.push(yr);
-  		subBoxes.push(xr);
-  		subBoxes.push(yl);
-  		subBoxes.push(xr);
-  		subBoxes.push(yr);
-  	}
-  	if(subBoxes.size() * 2 < numprocs) {
-  		// On arrête si la prochaine itération va générer plus de boites que le nombre de processus disponibles
-  		enough_boxes = false;
-  	}
-  } while(!enough_boxes); 
-
-  for (int i = 0; i < subBoxes.size(); ++i) {
-	  //MPI_Send();
-  }
-  
+  // Asking for the threshold below which a box is not split further
+  cout << "Precision? ";
+  cin >> precision;
   
   minimize(fun.f,fun.x,fun.y,precision,min_ub,minimums);
   
@@ -187,5 +124,7 @@ int main(int argc, char * argv[])
   copy(minimums.begin(),minimums.end(),
        ostream_iterator<minimizer>(cout,"\n"));    
   cout << "Number of minimizers: " << minimums.size() << endl;
-  cout << "Upper bound for minimum: " << min_ub << endl;*/
+  cout << "Upper bound for minimum: " << min_ub << endl;
+
+  MPI_Finalize();
 }
