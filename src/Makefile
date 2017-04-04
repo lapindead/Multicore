@@ -15,7 +15,8 @@ BINROOT=/comptes/goualard-f/local/bin
 COMMON_SOURCES = interval.cpp minimizer.cpp functions.cpp
 COMMON_OBJECTS = $(COMMON_SOURCES:.cpp=.o)
 
-CXXFLAGS = -std=gnu++0x -Wall #-I/comptes/goualard-f/local/include 
+CXXFLAGS = -std=gnu++0x -Wall 
+#-I/comptes/goualard-f/local/include 
 #Le include c'est pour le boost
 
 MPICXX = $(BINROOT)/mpic++

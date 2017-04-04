@@ -81,7 +81,7 @@ void minimize(itvfun f,  // Function to minimize
 
 int main(int argc, char * argv[])
 {
-  /*cout.precision(16);
+ /* cout.precision(16);
   // By default, the currently known upper bound for the minimizer is +oo
   double min_ub = numeric_limits<double>::infinity();
   // List of potential minimizers. They may be removed from the list

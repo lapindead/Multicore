@@ -1,3 +1,13 @@
+/*
+  Branch and bound algorithm to find the minimum of continuous binary 
+  functions using interval arithmetic.
+
+  Sequential version
+
+  Author: Frederic Goualard <Frederic.Goualard@univ-nantes.fr>
+  v. 1.0, 2013-02-15
+*/
+
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -5,8 +15,7 @@
 #include "interval.h"
 #include "functions.h"
 #include "minimizer.h"
-#include <mpi.h>
-//#include "C:\cygwin\usr\include\mpi.h"
+#include "mpi.h"
 
 using namespace std;
 
@@ -33,7 +42,7 @@ void minimize(itvfun f,  // Function to minimize
 	      minimizer_list& ml) // List of current minimizers
 {
   interval fxy = f(x,y);
-  
+  //cout<<"Je suis ici"<<endl;
   if (fxy.left() > min_ub) { // Current box cannot contain minimum?
     return ;
   }
@@ -54,7 +63,7 @@ void minimize(itvfun f,  // Function to minimize
     ml.insert(minimizer{x,y,fxy.left(),fxy.right()});
     return ;
   }
-
+  //cout<<"Je suis ici3"<<endl;
   // The box is still large enough => we split it into 4 sub-boxes
   // and recursively explore them
   interval xl, xr, yl, yr;
@@ -69,12 +78,17 @@ void minimize(itvfun f,  // Function to minimize
 
 int main(int argc, char * argv[])
 {
-	int numprocs,rank;
-	char procname[MPI_MAX_PROCESSOR_NAME];
+  int rank, numProcs;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   cout.precision(16);
   // By default, the currently known upper bound for the minimizer is +oo
   double min_ub = numeric_limits<double>::infinity();
+  double min_ub2 = numeric_limits<double>::infinity();
+
   // List of potential minimizers. They may be removed from the list
   // if we later discover that their smallest minimum possible is 
   // greater than the new current upper bound
@@ -90,41 +104,86 @@ int main(int argc, char * argv[])
   
   bool good_choice;
 
-  MPI_Init(&argc,&argv);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-
+  //Variable MPI
+  //interval myslice[1];
+  double minUpAll=42.0;
+  interval tabInterval[numProcs];
+  interval tabIntervalY[numProcs];
   // Asking the user for the name of the function to optimize
-  do {
-    good_choice = true;
+  if(rank == 0){
+    do {
+      good_choice = true;
 
-    cout << "Which function to optimize?\n";
-    cout << "Possible choices: ";
-    for (auto fname : functions) {
-      cout << fname.first << " ";
-    }
-    cout << endl;
-    cin >> choice_fun;
+      cout << "Which function to optimize?\n";
+      cout << "Possible choices: ";
+      for (auto fname : functions) {
+        cout << fname.first << " ";
+      }
+      cout << endl;
+      cin >> choice_fun;
+      
+      try {
+        fun = functions.at(choice_fun);
+      } catch (out_of_range) {
+        cerr << "Bad choice" << endl;
+        good_choice = false;
+      }
+    } while(!good_choice);
+
+    // Asking for the threshold below which a box is not split further
+    cout << "Precision? ";
+    cin >> precision;
+
+    double widthX = fun.x.width();
+    double n= widthX/numProcs;
+    double nY=(fun.y.width())/numProcs;
+    double lowerBoundX=fun.x.left();
+    double lowerBoundY=fun.y.left();
     
-    try {
-      fun = functions.at(choice_fun);
-    } catch (out_of_range) {
-      cerr << "Bad choice" << endl;
-      good_choice = false;
+    for ( int i=0;i<numProcs;++i ){
+      interval inter (lowerBoundX,lowerBoundX+n);
+      interval interY(lowerBoundY,lowerBoundY+nY);
+      tabInterval[i]=inter;
+      tabIntervalY[i]=interY;
+      lowerBoundX+=n;
+      lowerBoundY+=nY;
     }
-  } while(!good_choice);
+    
+  
+  }
+  cout<<" my rank is = "<<rank<<endl;
 
-  // Asking for the threshold below which a box is not split further
-  cout << "Precision? ";
-  cin >> precision;
-  
-  minimize(fun.f,fun.x,fun.y,precision,min_ub,minimums);
-  
+  MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  cout<<" my rank trolo is = "<<rank<<endl;
+  //MPI_Scatter(&tabInterval,1,MPI_BYTE,&myslice,1,MPI_BYTE,0,MPI_COMM_WORLD);
+  MPI_Bcast(&tabInterval,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
+  MPI_Bcast(&tabIntervalY,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
+
+  cout<<" my rank is Gne = "<<rank<<endl;
+  //cout<<"left of tab = "<<tabInterval[rank+1].right()<<endl;
+  //cout<<"myslice left = "<<myslice[0].left()<<endl;
+  if (rank == 1) {
+    cout << tabInterval[0].left() << endl;
+    cout << tabInterval[0].right() << endl;
+    cout << tabInterval[1].left() << endl;
+    cout << tabInterval[1].right() << endl;
+  }
+  for(int i=0;i<numProcs;++i){
+      minimize(fun.f,tabInterval[rank],tabIntervalY[i],precision,min_ub2,minimums);
+      if(min_ub>min_ub2) min_ub=min_ub2;
+  }
+  cout<<"Je suis rank = "<< rank<<" et mon min c'est : "<<min_ub<<endl;
+  // TODO :Reduc  max sur min_ub
+  MPI_Reduce(&min_ub,&minUpAll,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
   // Displaying all potential minimizers
-  copy(minimums.begin(),minimums.end(),
-       ostream_iterator<minimizer>(cout,"\n"));    
-  cout << "Number of minimizers: " << minimums.size() << endl;
-  cout << "Upper bound for minimum: " << min_ub << endl;
+  if (rank==0){
+    //copy(minimums.begin(),minimums.end(),
+    //ostream_iterator<minimizer>(cout,"\n"));    
+    //cout << "Number of minimizers: " << minimums.size() << endl;
+    cout << "Upper bound for minimum: " << minUpAll << endl;
+  }
+  
 
   MPI_Finalize();
 }
