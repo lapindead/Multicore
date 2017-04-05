@@ -108,7 +108,7 @@ int main(int argc, char * argv[])
 
   //Variable MPI
   interval myslice[1];
-  double minUpAll=42.0;
+  double minUpAll=42.0; // Aura le min_up après réduce
   interval tabInterval[numProcs];
   interval tabIntervalY[numProcs];
   // Asking the user for the name of the function to optimize
@@ -174,9 +174,9 @@ int main(int argc, char * argv[])
   for(int i=0;i<numProcs;++i){
       //Chaque machine s'occupe d'une "ligne" -> tabInterval[rank]
       // Chaque machine s'occupe un par un des cubes de la ligne -> tabIntervalY[i]
-      minimize(fun.f,myslice[0],tabIntervalY[i],precision,min_ub2,minimums);
+      minimize(fun.f,myslice[0],tabIntervalY[i],precision,min_ub,minimums);
       //Si min trouver plus petit que le min actuel alors il devient le nouveau min 
-      if(min_ub>min_ub2) min_ub=min_ub2;
+      //if(min_ub>min_ub2) min_ub=min_ub2;
   }
   // On fait un reduc pour trouver le plus petit min trouvé par chaque machine
   MPI_Reduce(&min_ub,&minUpAll,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
