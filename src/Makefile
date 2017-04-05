@@ -22,7 +22,10 @@ CXXFLAGS = -std=gnu++0x -Wall
 MPICXX = $(BINROOT)/mpic++
 
 
-all: optimization-seq optimization-mpi optimization-para
+all: optimization-seq optimization-mpi optimization-para optimization-mpi-omp
+
+optimization-mpi-omp: optimization-mpi-omp.cpp $(COMMON_OBJECTS)
+	$(MPICXX) $(CXXFLAGS) -fopenmp -o $@ $< $(COMMON_OBJECTS) -lm
 
 optimization-para: optimization-para.cpp $(COMMON_OBJECTS)
 	$(MPICXX) $(CXXFLAGS) -fopenmp -o $@ $< $(COMMON_OBJECTS) -lm

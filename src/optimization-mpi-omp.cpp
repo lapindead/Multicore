@@ -5,7 +5,10 @@
   Mpi + OMP version
 
   Author: Araya Montalvo , Casanova Mario
-  Warning : Ne marche que pour un nombre de machine égale à une puissance de 2 (1,2,4,8,etc...)
+
+  Warning : -Ne marche que pour un nombre de machine égale à une puissance de 2 (1,2,4,8,etc...)
+            -L'utilisation de OMP fait bug quand on demande des précision trop grande
+  -> précision limite varie selon le problème.
   v. 1.0, 2016-04-05
 */
 
@@ -13,7 +16,6 @@
 #include <iterator>
 #include <string>
 #include <stdexcept>
-#include <iomanip>
 #include "interval.h"
 #include "functions.h"
 #include "minimizer.h"
@@ -68,11 +70,23 @@ void minimize(itvfun f,  // Function to minimize
   // and recursively explore them
   interval xl, xr, yl, yr;
   split_box(x,y,xl,xr,yl,yr);
- 
-  minimize(f,xl,yl,threshold,min_ub,ml);
-  minimize(f,xl,yr,threshold,min_ub,ml);
-  minimize(f,xr,yl,threshold,min_ub,ml);
-  minimize(f,xr,yr,threshold,min_ub,ml);
+  /*#pragma omp parallel
+  #pragma omp single
+  { 
+    #pragma omp task
+    minimize(f,xl,yl,threshold,min_ub,ml);
+    #pragma omp task
+    minimize(f,xl,yr,threshold,min_ub,ml);
+    #pragma omp task
+    minimize(f,xr,yl,threshold,min_ub,ml);
+    #pragma omp task
+    minimize(f,xr,yr,threshold,min_ub,ml);
+
+  }  */
+    minimize(f,xl,yl,threshold,min_ub,ml);
+    minimize(f,xl,yr,threshold,min_ub,ml);
+    minimize(f,xr,yl,threshold,min_ub,ml);
+    minimize(f,xr,yr,threshold,min_ub,ml);
 
 
 }
@@ -107,7 +121,7 @@ int main(int argc, char * argv[])
   bool good_choice;
 
   //Variable MPI
-  interval myslice[1];
+  //interval myslice[1];
   double minUpAll=42.0;
   interval tabInterval[numProcs];
   interval tabIntervalY[numProcs];
@@ -164,28 +178,31 @@ int main(int argc, char * argv[])
   MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  //Chaque machine reçoit une du tableau d'interval en X -> on reçoit une ligne
-  MPI_Scatter(&tabInterval,sizeof(interval),MPI_BYTE,&myslice,sizeof(interval),
-    MPI_BYTE,0,MPI_COMM_WORLD);
-  //BCast du tableau d'interval en Y
+  //BCast des tableau d'intervalle 
+  MPI_Bcast(&tabInterval,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
   MPI_Bcast(&tabIntervalY,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
 
 
+  //Une thread en prallel pour chaque appelle de minimize
+  // Appelle de minimize par machine = nombre de machine
+  #pragma omp parallel 
+  #pragma omp for reduction(min : min_ub)
   for(int i=0;i<numProcs;++i){
       //Chaque machine s'occupe d'une "ligne" -> tabInterval[rank]
       // Chaque machine s'occupe un par un des cubes de la ligne -> tabIntervalY[i]
-      minimize(fun.f,myslice[0],tabIntervalY[i],precision,min_ub2,minimums);
+      minimize(fun.f,tabInterval[rank],tabIntervalY[i],precision,min_ub2,minimums);
       //Si min trouver plus petit que le min actuel alors il devient le nouveau min 
       if(min_ub>min_ub2) min_ub=min_ub2;
+      
   }
-  // On fait un reduc pour trouver le plus petit min trouvé par chaque machine
+  // On fait un reduc pour trouver le plu petit min trouver par chaque machine
   MPI_Reduce(&min_ub,&minUpAll,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
   // Displaying all potential minimizers
   if (rank==0){
-   // copy(minimums.begin(),minimums.end(),
+    //copy(minimums.begin(),minimums.end(),
     //ostream_iterator<minimizer>(cout,"\n"));    
     //cout << "Number of minimizers: " << minimums.size() << endl;
-    cout << setprecision (6)<<"Upper bound for minimum: " << minUpAll << endl;
+    cout << "Upper bound for minimum: " << minUpAll << endl;
   }
   
 
