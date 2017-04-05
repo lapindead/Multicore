@@ -17,6 +17,7 @@
 #include <string>
 #include <stdexcept>
 #include <iomanip>
+#include <queue>
 #include "interval.h"
 #include "functions.h"
 #include "minimizer.h"
@@ -122,8 +123,6 @@ int main(int argc, char * argv[])
   //Variable MPI
   //interval myslice[1];
   double minUpAll=42.0;
-  interval tabInterval[numProcs];
-  interval tabIntervalY[numProcs];
   queue<interval> subBoxes;
   int SZ;
   int localSZ;
@@ -152,28 +151,6 @@ int main(int argc, char * argv[])
     cout << "Precision? ";
     cin >> precision;
 
-    // Calcule pour taille de chaque "tranche" pour découper les intervalles
-    //suivant le nombre de machine
-    //double widthX = fun.x.width();
-    double n= (fun.x.width())/numProcs;
-    double nY=(fun.y.width())/numProcs;
-
-    //lower bound pour savoir ou commencer le découpage
-    double lowerBoundX=fun.x.left();
-    double lowerBoundY=fun.y.left();
-    
-    for ( int i=0;i<numProcs;++i ){
-      //On découpe l'intervale en X et en Y un nombre de fois
-      //égale au nombre de machines
-      interval inter (lowerBoundX,lowerBoundX+n);
-      interval interY(lowerBoundY,lowerBoundY+nY);
-      tabInterval[i]=inter;
-      tabIntervalY[i]=interY;
-      // lowerBound = upperBound pour passer au prochain intervale
-      lowerBoundX+=n;
-      lowerBoundY+=nY;
-    }
-  	
   	bool enough_boxes;
   	int size;
   	
@@ -181,15 +158,19 @@ int main(int argc, char * argv[])
 		subBoxes.push(fun.y);
 		do { 
 			// Je considère qu'on a plus de 1 procs donc on rentre au moins une fois dans la boucle
-			enough_boxes = true;
+			enough_boxes = false;
 			size = subBoxes.size();
 			// Divise chaque boite de la file en 4 nouvelles boites  	
-			for(int i = 0; i < size; i + 2) {
+			for(int i = 0; i < size; i = i + 2) {
 				interval xl, xr, yl, yr;
-				split_box(subBoxes[0],subBoxes[1],xl,xr,yl,yr);
+				interval tmp1 = subBoxes.front();
+				subBoxes.pop();
+				interval tmp2 = subBoxes.front();
+				subBoxes.pop();
 				// Enlève la boite divisée
-				subBoxes.pop();
-				subBoxes.pop();
+				
+				split_box(tmp1,tmp2,xl,xr,yl,yr);
+				
 				// Ajoutte les nouvelles boites
 				subBoxes.push(xl);
 				subBoxes.push(yl);
@@ -200,56 +181,52 @@ int main(int argc, char * argv[])
 				subBoxes.push(xr);
 				subBoxes.push(yr);
 			}
-			if(subBoxes.size() / 2 <= numprocs) {
+			if(subBoxes.size() / 2 >= numProcs) {
 				// On arrête si on a suffisement de boites pour que chaque proc puisse en avoir une (au moins)
-				enough_boxes = false;
+				enough_boxes = true;
 			}
 		} while(!enough_boxes); 
     SZ = subBoxes.size();
+    
   }
+  MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  interval subs[SZ];
+  // fabrication d'un tableau d'intervalles plus facilement utilisable qu'une queue.
+  if ( rank == 0 ) {
+		for (int i = 0; i < SZ; ++i) {
+			subs[i] = subBoxes.front();
+			subBoxes.pop();
+		}
+	}
 
   MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  localSz = SZ % numProcs == 0 ? SZ / numProcs : (SZ / numProcs) *2;
   
-  interval myslice[localSZ];
-  
-  MPI_Scatter(&subBoxes,sizeof(interval)*localSZ,MPI_BYTE,&myslice,sizeof(interval)*localSZ,    MPI_BYTE,0,MPI_COMM_WORLD);
-
-  //BCast des tableau d'intervalle 
-  //MPI_Bcast(&tabInterval,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
-  //Chaque machine reçoit une du tableau d'interval en X -> on reçoit une ligne
-  /*
-  MPI_Scatter(&tabInterval,sizeof(interval),MPI_BYTE,&myslice,sizeof(interval),
-    MPI_BYTE,0,MPI_COMM_WORLD);
-   */
-  //BCast du tableau d'interval en 
-  //MPI_Bcast(&tabIntervalY,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);
-
-	/*
-  //Une thread en prallel pour chaque appelle de minimize
-  // Appelle de minimize par machine = nombre de machine
-  #pragma omp parallel 
-  {
-    double min_ub2 = numeric_limits<double>::infinity();
-     minimizer_list minimums;
-    #pragma omp for reduction(min : min_ub) 
-    for(int i=0;i<numProcs;++i){
-     
-     //Chaque machine s'occupe d'une "ligne" -> myslice[0]
-      // Chaque machine s'occupe un par un des cubes de la ligne -> tabIntervalY[i]
-      minimize(fun.f,myslice[0],tabIntervalY[i],precision,min_ub2,minimums);
-      //Si min trouver plus petit que le min actuel alors il devient le nouveau min 
-      if(min_ub>min_ub2) min_ub=min_ub2;
-      
-    }
+  // calcul du nombre de boites que vont devoir traiter chaque machine
+  if ( SZ % numProcs == 0 ) {
+  	// si le nombre de machines est un multiple du nombre de boites (numProcs est une puissance de deux)
+  	localSZ = SZ / numProcs;
+  	// on divise équitablment les boites entre les machines
   }
-  */ 
+  else {
+  	// la machine de dernier rang recoit les boites supplémentaires.
+  	// possiblement améliorable pour répartir les boites supplémentaires s'il y en a plus d'une.
+  	if (rank == numProcs) {
+  		localSZ = SZ / numProcs + SZ % numProcs;
+  		
+  	} else {
+  		localSZ = SZ / numProcs;
+  	}
+  }
+  
+	// broadcast du tableau de boites, un scatter ne marche pas si chaque machine
+	// n'a pas le même nombre de boites a traiter.
+	MPI_Bcast(&subs,sizeof(interval)*SZ,MPI_BYTE,0,MPI_COMM_WORLD);
+
   minimizer_list minimums;
   double min_ub2 = numeric_limits<double>::infinity();
-  for (int i = 0; i < localSZ; i = i+2) {
-  	minimize(fun.f,myslice[i],myslice[i+1],precision,min_ub2,minimums);
+  for (int i = (SZ/numProcs)*rank; i < (SZ/numProcs)*rank + localSZ; i = i+2) {
+  	minimize(fun.f,subs[i],subs[i+1],precision,min_ub2,minimums);
   	if(min_ub>min_ub2) min_ub=min_ub2;
   
   }
