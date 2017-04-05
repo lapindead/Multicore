@@ -172,7 +172,7 @@ int main(int argc, char * argv[])
 
 
   for(int i=0;i<numProcs;++i){
-      //Chaque machine s'occupe d'une "ligne" -> tabInterval[rank]
+      //Chaque machine s'occupe d'une "ligne" -> myslice[0]
       // Chaque machine s'occupe un par un des cubes de la ligne -> tabIntervalY[i]
       minimize(fun.f,myslice[0],tabIntervalY[i],precision,min_ub,minimums);
       //Si min trouver plus petit que le min actuel alors il devient le nouveau min 
