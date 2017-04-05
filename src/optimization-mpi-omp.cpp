@@ -7,8 +7,7 @@
   Author: Araya Montalvo , Casanova Mario
 
   Warning : -Ne marche que pour un nombre de machine égale à une puissance de 2 (1,2,4,8,etc...)
-  -Warning omp fait bug quand la précision devient trop élevé. La précision
-  limite dépend da la fonction à minimize.
+
   v. 1.0, 2016-04-05
 
 */
