@@ -124,9 +124,6 @@ int main(int argc, char * argv[])
   double minUpAll=42.0;
   interval tabInterval[numProcs];
   interval tabIntervalY[numProcs];
-  queue<interval> subBoxes;
-  int SZ;
-  int localSZ;
   // Asking the user for the name of the function to optimize
   if(rank == 0){
     do {
@@ -152,7 +149,7 @@ int main(int argc, char * argv[])
     cout << "Precision? ";
     cin >> precision;
 
-    // Calcule pour taille de chaque "tranche" pour découper les intervalles
+    // Calcule pour taille de chaque "tranche" pour découpé les intervalles
     //suivant le nombre de machine
     //double widthX = fun.x.width();
     double n= (fun.x.width())/numProcs;
@@ -169,52 +166,16 @@ int main(int argc, char * argv[])
       interval interY(lowerBoundY,lowerBoundY+nY);
       tabInterval[i]=inter;
       tabIntervalY[i]=interY;
-      // lowerBound = upperBound pour passer au prochain intervale
+      // lowerBound = upperBound pour passer au prochaine intervale
       lowerBoundX+=n;
       lowerBoundY+=nY;
     }
-  	
-  	bool enough_boxes;
-  	int size;
-  	
-  	subBoxes.push(fun.x);
-		subBoxes.push(fun.y);
-		do { 
-			// Je considère qu'on a plus de 1 procs donc on rentre au moins une fois dans la boucle
-			enough_boxes = true;
-			size = subBoxes.size();
-			// Divise chaque boite de la file en 4 nouvelles boites  	
-			for(int i = 0; i < size; i + 2) {
-				interval xl, xr, yl, yr;
-				split_box(subBoxes[0],subBoxes[1],xl,xr,yl,yr);
-				// Enlève la boite divisée
-				subBoxes.pop();
-				subBoxes.pop();
-				// Ajoutte les nouvelles boites
-				subBoxes.push(xl);
-				subBoxes.push(yl);
-				subBoxes.push(xl);
-				subBoxes.push(yr);
-				subBoxes.push(xr);
-				subBoxes.push(yl);
-				subBoxes.push(xr);
-				subBoxes.push(yr);
-			}
-			if(subBoxes.size() / 2 <= numprocs) {
-				// On arrête si on a suffisement de boites pour que chaque proc puisse en avoir une (au moins)
-				enough_boxes = false;
-			}
-		} while(!enough_boxes); 
-    SZ = subBoxes.size();
+    
+  
   }
 
   MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  localSz = SZ % numProcs == 0 ? sZ / 
-  
-  MPI_Scatter(&subBoxes,sizeof(interval)*(subBoxes.size()/numProcs),MPI_BYTE,&myslice,sizeof(interval)*(subBoxes.size()/numProcs),
-    MPI_BYTE,0,MPI_COMM_WORLD);
 
   //BCast des tableau d'intervalle 
   //MPI_Bcast(&tabInterval,sizeof(interval)*numProcs,MPI_BYTE,0,MPI_COMM_WORLD);

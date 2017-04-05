@@ -211,7 +211,7 @@ int main(int argc, char * argv[])
   else {
   	// la machine de dernier rang recoit les boites supplémentaires.
   	// possiblement améliorable pour répartir les boites supplémentaires s'il y en a plus d'une.
-  	if (rank == numProcs) {
+  	if (rank == numProcs - 1) {
   		localSZ = SZ / numProcs + SZ % numProcs;
   		
   	} else {

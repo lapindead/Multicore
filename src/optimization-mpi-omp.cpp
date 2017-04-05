@@ -188,10 +188,11 @@ int main(int argc, char * argv[])
 
   //Une thread en prallel pour chaque appelle de minimize
   // Appelle de minimize par machine = nombre de machine
+  omp_set_num_threads(4);
   #pragma omp parallel 
   {
     double min_ub2 = numeric_limits<double>::infinity();
-     minimizer_list minimums;
+    minimizer_list minimums;
     #pragma omp for reduction(min : min_ub) 
     for(int i=0;i<numProcs;++i){
      
