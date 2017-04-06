@@ -2,11 +2,11 @@
   Branch and bound algorithm to find the minimum of continuous binary 
   functions using interval arithmetic.
 
-  Mpi + OMP version
+  Mpi version
 
   Author: Araya Montalvo , Casanova Mario
 
-  Warning : -Ne marche que pour un nombre de machine égale à une puissance de 2 (1,2,4,8,etc...)
+  Warning : -Ne marche que pour un nombre de machine �gale � une puissance de 2 (1,2,4,8,etc...)
 
   v. 1.0, 2016-04-05
 
@@ -151,81 +151,71 @@ int main(int argc, char * argv[])
     cout << "Precision? ";
     cin >> precision;
 
-  	bool enough_boxes;
-  	int size;
+  	int size = 1;
   	
   	subBoxes.push(fun.x);
-		subBoxes.push(fun.y);
-		do { 
-			// Je considère qu'on a plus de 1 procs donc on rentre au moins une fois dans la boucle
-			enough_boxes = false;
-			size = subBoxes.size();
-			// Divise chaque boite de la file en 4 nouvelles boites  	
-			for(int i = 0; i < size; i = i + 2) {
-				interval xl, xr, yl, yr;
-				interval tmp1 = subBoxes.front();
-				subBoxes.pop();
-				interval tmp2 = subBoxes.front();
-				subBoxes.pop();
-				// Enlève la boite divisée
-				
-				split_box(tmp1,tmp2,xl,xr,yl,yr);
-				
-				// Ajoutte les nouvelles boites
-				subBoxes.push(xl);
-				subBoxes.push(yl);
-				subBoxes.push(xl);
-				subBoxes.push(yr);
-				subBoxes.push(xr);
-				subBoxes.push(yl);
-				subBoxes.push(xr);
-				subBoxes.push(yr);
-			}
-			if(subBoxes.size() / 2 >= numProcs) {
-				// On arrête si on a suffisement de boites pour que chaque proc puisse en avoir une (au moins)
-				enough_boxes = true;
-			}
-		} while(!enough_boxes); 
+	subBoxes.push(fun.y);
+	while (size < numProcs) {
+		interval xl, xr, yl, yr;
+		interval tmp1 = subBoxes.front();
+		subBoxes.pop();
+		interval tmp2 = subBoxes.front();
+		subBoxes.pop();
+		// Enl�ve la boite divis�e
+		
+		split_box(tmp1,tmp2,xl,xr,yl,yr);
+		
+		// Ajoutte les nouvelles boites
+		subBoxes.push(xl);
+		subBoxes.push(yl);
+		subBoxes.push(xl);
+		subBoxes.push(yr);
+		subBoxes.push(xr);
+		subBoxes.push(yl);
+		subBoxes.push(xr);
+		subBoxes.push(yr);
+		size = subBoxes.size() / 2;
+	}
     SZ = subBoxes.size();
-    
   }
+  // bradcast de la taille du tableau de boites
   MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
   interval subs[SZ];
-  // fabrication d'un tableau d'intervalles plus facilement utilisable qu'une queue.
+  int localSZs[numProcs];
+  
   if ( rank == 0 ) {
-		for (int i = 0; i < SZ; ++i) {
-			subs[i] = subBoxes.front();
-			subBoxes.pop();
+	
+	int nbBox = SZ / 2;
+	// fabrication d'un tableau d'intervalles plus facilement utilisable qu'une queue.
+	for (int i = 0; i < SZ; ++i) {
+		subs[i] = subBoxes.front();
+		subBoxes.pop();
+	}
+	// attribution des boites aux machines
+	for (int i = numProcs - 1; i >= 0; --i) {
+		if (i > numProcs - (nbBox % numProcs)) {
+			localSZs[i] = nbBox / numProcs + nbBox % numProcs;
+		} else {
+			localSZs[i] = nbBox / numProcs;
 		}
 	}
+  }
 
   MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&precision, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
   
-  // calcul du nombre de boites que vont devoir traiter chaque machine
-  if ( SZ % numProcs == 0 ) {
-  	// si le nombre de machines est un multiple du nombre de boites (numProcs est une puissance de deux)
-  	localSZ = SZ / numProcs;
-  	// on divise équitablment les boites entre les machines
-  }
-  else {
-  	// la machine de dernier rang recoit les boites supplémentaires.
-  	// possiblement améliorable pour répartir les boites supplémentaires s'il y en a plus d'une.
-  	if (rank == numProcs) {
-  		localSZ = SZ / numProcs + SZ % numProcs;
-  		
-  	} else {
-  		localSZ = SZ / numProcs;
-  	}
-  }
-  
-	// broadcast du tableau de boites, un scatter ne marche pas si chaque machine
-	// n'a pas le même nombre de boites a traiter.
-	MPI_Bcast(&subs,sizeof(interval)*SZ,MPI_BYTE,0,MPI_COMM_WORLD);
+  // broadcast de la position des boites dans le tableau que chaque machine va traiter 
+  MPI_Bcast(&localSZs, numProcs, MPI_INT, 0, MPI_COMM_WORLD);
+  localSZ = localSZs[rank];
+
+  // broadcast du tableau de boites, un scatter ne marche pas si chaque machine
+  // n'a pas le m�me nombre de boites a traiter.
+  MPI_Bcast(&subs,sizeof(interval)*SZ,MPI_BYTE,0,MPI_COMM_WORLD);
 
   minimizer_list minimums;
   double min_ub2 = numeric_limits<double>::infinity();
-  for (int i = (SZ/numProcs)*rank; i < (SZ/numProcs)*rank + localSZ; i = i+2) {
+  //for (int i = (SZ/numProcs)*rank; i < (SZ/numProcs)*rank + localSZ; i = i + 2) {
+  for (int i = (nbBox/numProcs)*rank; i < (nbBox/numProcs)*rank + localSZ; ++i) {
   	minimize(fun.f,subs[i],subs[i+1],precision,min_ub2,minimums);
   	if(min_ub>min_ub2) min_ub=min_ub2;
   

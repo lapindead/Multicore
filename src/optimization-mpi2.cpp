@@ -182,23 +182,23 @@ int main(int argc, char * argv[])
   MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
   interval subs[SZ];
   int localSZs[numProcs];
+  int nbBox = SZ / 2;
+  
   
   if ( rank == 0 ) {
-	
-	int nbBox = SZ / 2;
-	// fabrication d'un tableau d'intervalles plus facilement utilisable qu'une queue.
-	for (int i = 0; i < SZ; ++i) {
-		subs[i] = subBoxes.front();
-		subBoxes.pop();
-	}
-	// attribution des boites aux machines
-	for (int i = numProcs - 1; i >= 0; --i) {
-		if (i > numProcs - (nbBox % numProcs)) {
-			localSZs[i] = nbBox / numProcs + nbBox % numProcs;
-		} else {
-			localSZs[i] = nbBox / numProcs;
+		// fabrication d'un tableau d'intervalles plus facilement utilisable qu'une queue.
+		for (int i = 0; i < SZ; ++i) {
+			subs[i] = subBoxes.front();
+			subBoxes.pop();
 		}
-	}
+		// attribution des boites aux machines
+		for (int i = numProcs - 1; i >= 0; --i) {
+			if (i > numProcs - (nbBox % numProcs)) {
+				localSZs[i] = nbBox / numProcs + nbBox % numProcs;
+			} else {
+				localSZs[i] = nbBox / numProcs;
+			}
+		}
   }
 
   MPI_Bcast(&fun, sizeof(opt_fun_t), MPI_BYTE, 0, MPI_COMM_WORLD);
