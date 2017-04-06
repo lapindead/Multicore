@@ -154,30 +154,30 @@ int main(int argc, char * argv[])
   	int size = 1;
   	
   	subBoxes.push(fun.x);
-		subBoxes.push(fun.y);
-		while (size < numProcs) {
-			interval xl, xr, yl, yr;
-			interval tmp1 = subBoxes.front();
-			subBoxes.pop();
-			interval tmp2 = subBoxes.front();
-			subBoxes.pop();
-			// Enlève la boite divisée
+	subBoxes.push(fun.y);
+	while (size < numProcs) {
+		interval xl, xr, yl, yr;
+		interval tmp1 = subBoxes.front();
+		subBoxes.pop();
+		interval tmp2 = subBoxes.front();
+		subBoxes.pop();
+		// Enlève la boite divisée
 		
-			split_box(tmp1,tmp2,xl,xr,yl,yr);
+		split_box(tmp1,tmp2,xl,xr,yl,yr);
 		
-			// Ajoutte les nouvelles boites
-			subBoxes.push(xl);
-			subBoxes.push(yl);
-			subBoxes.push(xl);
-			subBoxes.push(yr);
-			subBoxes.push(xr);
-			subBoxes.push(yl);
-			subBoxes.push(xr);
-			subBoxes.push(yr);
-			size = subBoxes.size() / 2;
-		}
-		  SZ = subBoxes.size();
+		// Ajoutte les nouvelles boites
+		subBoxes.push(xl);
+		subBoxes.push(yl);
+		subBoxes.push(xl);
+		subBoxes.push(yr);
+		subBoxes.push(xr);
+		subBoxes.push(yl);
+		subBoxes.push(xr);
+		subBoxes.push(yr);
+		size = subBoxes.size() / 2;
 	}
+    SZ = subBoxes.size();
+  }
   // bradcast de la taille du tableau de boites
   MPI_Bcast(&SZ, 1, MPI_INT, 0, MPI_COMM_WORLD);
   interval subs[SZ];
